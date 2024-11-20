@@ -1,8 +1,9 @@
 import { z, ZodRawShape } from "zod";
-import { ChatOpenAI } from "langchain/chat_models/openai";
+import axios from "axios";
+import { ChatOpenAI } from "@langchain/openai";
 import { JsonOutputFunctionsParser } from "langchain/output_parsers";
-import { ChatMessage, HumanMessage } from "langchain/schema";
-import { PromptTemplate } from "langchain/prompts";
+import { ChatMessage, HumanMessage } from "@langchain/core/messages";
+import { PromptTemplate, ChatPromptTemplate } from "@langchain/core/prompts";
 //import { JsonOutputToolsParser } from "langchain/output_parsers";
 
 
@@ -74,11 +75,21 @@ const schema: ZodRawShape = {
   }),
 };
 
+const model_gpt = new ChatOpenAI({ 
+  model: "gpt-4o",
+  azureOpenAIApiVersion: "2023-03-15-preview",
+  azureOpenAIApiDeploymentName: "gpt-4o",
+  temperature: 0.2,
+  azureOpenAIApiKey: key,
+  azureOpenAIBasePath: path,
+  stop: ["\n", ".", "!", "?"],
+ });
+
 // Instantiate the ChatOpenAI class
 const model = new ChatOpenAI({
   temperature: 0.2,
   azureOpenAIApiKey: key,
-  azureOpenAIApiVersion: "2023-07-01-preview",
+  azureOpenAIApiVersion: "2023-03-15-preview",
   azureOpenAIApiDeploymentName: "gpt-4",
   azureOpenAIBasePath: path,
 });
@@ -91,6 +102,28 @@ const runnable = model
   })
   .pipe(parser);
 
+  export async function getGptResponse (): Promise<string> {
+    const imageUrl =
+        "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg";
+    const axiosRes = await axios.get(imageUrl, { responseType: "arraybuffer" });
+    const base64 = btoa(
+      new Uint8Array(axiosRes.data).reduce(
+        (data, byte) => data + String.fromCharCode(byte),
+        ""
+      )
+    );
+    const prompt = ChatPromptTemplate.fromMessages([
+      ["system", "Describe the image provided"],
+      [
+        "user",
+        [{ type: "image_url", image_url: "data:image/jpeg;base64,{base64}" }],
+      ],
+    ]);
+    const chain = prompt.pipe(model_gpt);
+    const response = await chain.invoke({ base64 });
+    return JSON.stringify(response.content);
+  }
+
   export async function getAIResponse ( text: string): Promise<string> {
 
     if (!text) {
@@ -101,7 +134,7 @@ const runnable = model
       description: text,
     });
     const result = await runnable.invoke([
-        new ChatMessage({ role: 'assistant', content: formattedPrompt }),
+        new ChatMessage({ role: 'user', content: formattedPrompt }),
       ]);
     
     console.log({ result });

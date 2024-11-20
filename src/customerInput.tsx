@@ -14,6 +14,7 @@ const CustomerInput = (props:any) => {
         accident.data = message;
         props.sendData(accident);
     }
+    
     return (
       <div>
         <textarea 
